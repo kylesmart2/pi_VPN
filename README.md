@@ -3,9 +3,12 @@
 I have configured an easy script to initiate installation of necessary tools and files.
 
 1.Run startup script. Please download from this github. 
+	Make sure to make script executable:
+ 
+ 		chmod +x startup.sh
+Run script:
 
-	Make sure to make script executable: chmod +x startup.sh
-	Run script: ./startup.sh
+	 ./startup.sh
 2. Run startup ansible playbook
    
 	ansible-playbook startup.yml
