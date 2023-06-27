@@ -71,7 +71,7 @@
         mode: 0664
         content: |
           interface=wlan0
-            dhcp-range=192.168.0.11, 192.168.0.30, 255.255.255.0, 24h
+            dhcp-range=192.168.0.11,192.168.0.30,255.255.255.0,24h
 
 #create hostapd.conf file
     - name: setup hostapd config file
@@ -93,15 +93,15 @@
           wpa_key_mgmt=WPA-PSK
           wpa_pairwise=TKIP
           rsn_pairwise=CCMP
-          ssid=Kyles_VPN
+          ssid=KylesVPN
           wpa_passphrase=Emogene1
 
 #tell hostapd where the config file is located
     - name: Set static IP in dhcpcd.conf
       ansible.builtin.lineinfile:
         path: /etc/default/hostapd
-        regexp: '^#DAEMON_CONF=='
-        line: 'DAEMON_CONF==/etc/hostapd/hostapd.conf'
+        regexp: '^#DAEMON_CONF='
+        line: 'DAEMON_CONF="/etc/hostapd/hostapd.conf"'
         backup: yes
 
 #setup static forwarding
@@ -121,19 +121,19 @@
       ansible.builtin.shell: "sh -c 'iptables-save > /etc/iptables.ipv4.nat'"
 
 #add iptable updates to run at start
-    - name: Set iptables update to run at start
+    - name: Add lines above certain line in rc.local
       ansible.builtin.lineinfile:
-        path: /etc/sysctl.conf
-        regexp: '^#iptables-restore'
-        line: 'iptables-restore < /etc/iptables.ipv4.nat'
-        backup: yes
+        path: /etc/rc.local
+        insertbefore: '^exit 0'
+        line: |
+          iptables-restore < /etc/iptables.ipv4.nat
 
 #add a bridge
-    - name: Execute command
+    - name: add a bridge
       ansible.builtin.shell: "brctl addbr br0"
 
 #connect bridge to eth0
-    - name: Execute command
+    - name: connect the bridge
       ansible.builtin.shell: "brctl addif br0 eth0"
 
 #edit interfaces file
@@ -141,6 +141,7 @@
       ansible.builtin.blockinfile:
         path: /etc/network/interfaces
         block: |
+          #Bridge setup
           auto br0
           iface br0 inet manual
           bridge_ports eth0 wlan0
