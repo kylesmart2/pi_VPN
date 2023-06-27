@@ -23,4 +23,4 @@ I have configured an easy script to initiate installation of necessary tools and
    	```
     	reboot now
      	```
-5. Connect to wifi and check whatsmyip.com to see your public IP. \
+5. Connect to wifi and check whatsmyip.com to see your public IP. 
