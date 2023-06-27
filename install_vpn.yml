@@ -1,0 +1,44 @@
+- hosts: localhost
+  gather_facts: no
+  remote_user: root
+  become: true
+
+  tasks:
+    - name: "switching directory"
+      shell: "cd /etc/openvpn"
+
+    - name: Clone repository
+      ansible.builtin.git:
+        repo: git@github.com:kylesmart2/pi_VPN.git
+        dest: /home/pi/Downloads/Ansible/pi_VPN
+        version: main  # Replace with the desired branch or commit
+        accept_hostkey: yes
+        key_file: /home/pi/.ssh/github  # Optional if using SSH key
+
+#copy openvpn config to openvpn folder
+    - name: "copy config file to openvpn folder"
+      shell: "cp /home/pi/Downloads/Ansible/pi_VPN/user12.ovpn /etc/openvpn/pi_VPN/user12.ovpn"
+
+    - name: "configuring openvpn"
+      shell: "sudo openvpn --config 'pi_VPN/user12.ovpn' "
+
+    - name: "make script executable"
+      shell: "chmod +x iptables.sh"
+
+#run script to edit iptables and save it      
+    - name: "Execute script"
+      shell: "./iptables.sh"
+
+#add lines to rc.local file
+    - name: Add lines above certain line in rc.local
+      ansible.builtin.lineinfile:
+        path: /etc/rc.local
+        insertbefore: '^exit 0'
+        line: |
+          sleep 5
+          sudo openvpn --config 'pi_VPN/user12.ovpn'
+
+#completion message
+    - name: Write completion message
+      ansible.builtin.debug:
+        msg: "Playbook execution is complete. Please reboot your system."

@@ -1,0 +1,34 @@
+---
+- name: Configure Static IP
+  hosts: localhost
+  remote_user: root
+  become: true
+  gather_facts: no
+
+  tasks:
+    - name: Get network facts
+      ansible.builtin.setup:
+        gather_subset: network
+      register: network_facts
+
+    - name: Save IP address, gateway, and DNS servers as environment variables
+      ansible.builtin.set_fact:
+        ip_address: "{{ network_facts.ansible_facts.ansible_eth0.ipv4.address }}"
+        gateway: "{{ network_facts.ansible_facts.ansible_default_ipv4.gateway }}"
+        dns_servers: "{{ network_facts.ansible_facts.ansible_dns.nameservers }}"
+
+    - name: Set static IP in dhcpcd.conf
+      ansible.builtin.lineinfile:
+        path: /etc/dhcpcd.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        backup: yes
+      loop:
+        - { regexp: '^static ip_address=', line: 'static ip_address={{ ip_address }}/24' }
+        - { regexp: '^static routers=', line: 'static routers={{ gateway }}' }
+        - { regexp: '^static domain_name_servers=', line: 'static domain_name_servers={{ dns_servers|join(",") }}' }
+
+    - name: Restart networking service
+      ansible.builtin.service:
+        name: dhcpcd
+        state: restarted

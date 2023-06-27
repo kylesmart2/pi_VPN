@@ -1,0 +1,185 @@
+# Run with `ansible-playbook ~/raspberry-config.yaml`
+- hosts: localhost
+  gather_facts: no
+  remote_user: root
+  become: true
+
+  tasks:
+    - name: Install packages
+      apt:
+        update_cache: yes
+        autoremove: yes
+        state: present
+        pkg:
+          - hostapd
+          - dnsmasq
+          - bridge-utils
+          - openvpn
+
+    - name: "stop hostapd"
+      shell: "systemctl stop hostapd || echo already stopped"
+    
+    - name: "stop dnsmasq"
+      shell: "systemctl stop dnsmasq || echo already stopped"
+    
+
+# used to mkdir and mount a disk to the directory
+    # - file: { path: /ext-disk, state: directory }
+    #   tags: [ disk ]
+
+    # - name: '/etc/fstab'
+    #   lineinfile:
+    #     path: /etc/fstab
+    #     line: 'UUID=240A-1CED  /ext-disk  vfat   auto,nofail,noatime,rw,exec,uid=plex,gid=plex,nouser,async  0 0'
+    #     regexp: ^.*\/ext-disk
+    #   register: fstab
+    #   tags: [ disk, fstab ]
+
+# set static ip for wlan0
+    - name: static ip
+      copy:
+        dest: /etc/dhcpcd.conf
+        owner: root
+        group: root
+        mode: 0664
+        content: |
+          hostname
+          clientid
+          persistent
+          option rapid_commit
+          option domain_name_servers, domain_name, domain_search, host_name
+          option classless_static_routes
+          option interface_mtu
+          require dhcp_server_identifier
+          slaac private
+          interface wlan0
+          static ip_address=192.168.0.10/24
+          denyinterfaces eth0
+          denyinterfaces wlan0
+      tags: [ network ]
+
+#make a dnsmasq config to hand out IP addresses
+    - name: setup dnsmasq config file
+      shell: "mv /etc/dnsmasq.conf /etc/dnsmasq.conf.orig || echo Failed to copy dnsmasq.conf"
+      copy:
+        dest: /etc/dnsmasq.conf
+        owner: root
+        group: root
+        mode: 0664
+        content: |
+          interface=wlan0
+            dhcp-range=192.168.0.11, 192.168.0.30, 255.255.255.0, 24h
+
+#create hostapd.conf file
+    - name: setup hostapd config file
+      copy:
+        dest: /etc/hostapd/hostapd.conf
+        owner: root
+        group: root
+        mode: 0664
+        content: |
+          interface=wlan0
+          bridge=br0
+          hw_mode=g
+          channel=7
+          wmm_enabled=0
+          macaddr_acl=0
+          auth_algs=1
+          ignore_broadcast_ssid=0
+          wpa=2
+          wpa_key_mgmt=WPA-PSK
+          wpa_pairwise=TKIP
+          rsn_pairwise=CCMP
+          ssid=Kyles_VPN
+          wpa_passphrase=Emogene1
+
+#tell hostapd where the config file is located
+    - name: Set static IP in dhcpcd.conf
+      ansible.builtin.lineinfile:
+        path: /etc/default/hostapd
+        regexp: '^#DAEMON_CONF=='
+        line: 'DAEMON_CONF==/etc/hostapd/hostapd.conf'
+        backup: yes
+
+#setup static forwarding
+    - name: Set static forwarding
+      ansible.builtin.lineinfile:
+        path: /etc/sysctl.conf
+        regexp: '^#net.ipv4.ip_forward=1'
+        line: 'net.ipv4.ip_forward=1'
+        backup: yes
+
+#set iptables rules
+    - name: Execute command
+      ansible.builtin.shell: "iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
+
+#save iptables config
+    - name: Execute command
+      ansible.builtin.shell: "sh -c 'iptables-save > /etc/iptables.ipv4.nat'"
+
+#add iptable updates to run at start
+    - name: Set iptables update to run at start
+      ansible.builtin.lineinfile:
+        path: /etc/sysctl.conf
+        regexp: '^#iptables-restore'
+        line: 'iptables-restore < /etc/iptables.ipv4.nat'
+        backup: yes
+
+#add a bridge
+    - name: Execute command
+      ansible.builtin.shell: "brctl addbr br0"
+
+#connect bridge to eth0
+    - name: Execute command
+      ansible.builtin.shell: "brctl addif br0 eth0"
+
+#edit interfaces file
+    - name: Edit interfaces file
+      ansible.builtin.blockinfile:
+        path: /etc/network/interfaces
+        block: |
+          auto br0
+          iface br0 inet manual
+          bridge_ports eth0 wlan0
+
+    # - name: "authorise SSH key mac 13 e 15"
+    #   copy:
+    #     dest: /root/.ssh/authorized_keys
+    #     content: |
+    #       ssh-rsa copy me from your local ~/.ssh/id_rsa.pub
+    #       ssh-rsa copy me from your local ~/.ssh/id_rsa.pub
+    #       ssh-rsa copy me from your local ~/.ssh/id_rsa.pub
+    #   tags: [ ssh ]
+
+    - cron:
+        name: reboot at 2am
+        minute: "0"
+        hour: "2"
+        user: root
+        job: "/sbin/shutdown -r now"
+      tags: [ cron ]
+
+    - cron:
+        name: "every month at 1am launch raspi-update.sh"
+        minute: "0"
+        hour: "1"
+        day: 1
+        user: root
+        job: "/bin/sh /usr/local/bin/raspi-update.sh"
+      tags: [ cron ]
+
+    - name: "maintenance script to update dist upgrade"
+      copy:
+        dest: /usr/local/bin/raspi-update.sh
+        content: |
+          set -x
+          apt update -y
+          apt autoremove
+          apt upgrade -y
+          apt dist-upgrade -y
+      tags: [ cron ]
+
+#completion message
+    - name: Write completion message
+      ansible.builtin.debug:
+        msg: "Playbook execution is complete. Please reboot your system and then run the install_vpn.yml playbook."
