@@ -5,8 +5,8 @@ I have configured an easy script to initiate installation of necessary tools and
 1.Run startup script. Please download from this github.\
 	Make sure to make script executable: \
  	```
-  	chmod +x startup.sh
-   	```
+chmod +x startup.sh
+```
 	Run script: \
 	```
   	./startup.sh
