@@ -58,9 +58,12 @@
           denyinterfaces wlan0
       tags: [ network ]
 
-#make a dnsmasq config to hand out IP addresses
+#copy dnsmasq config to hand out IP addresses
     - name: setup dnsmasq config file
       shell: "mv /etc/dnsmasq.conf /etc/dnsmasq.conf.orig || echo Failed to copy dnsmasq.conf"
+      
+#make a dnsmasq config
+    - name: "make new file for dnsmasq"
       copy:
         dest: /etc/dnsmasq.conf
         owner: root
